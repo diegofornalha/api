@@ -422,6 +422,33 @@ def main():
             
             st.metric("Logs em Memória", len(st.session_state.debug_logs))
             st.metric("Testes Executados", len(st.session_state.test_results))
+            
+            # Configurações avançadas de sessão
+            st.subheader("⚙️ Config de Sessão")
+            
+            # System prompt personalizado
+            custom_system_prompt = st.text_area(
+                "System Prompt:",
+                value=st.session_state.get('session_system_prompt', ''),
+                height=80,
+                placeholder="Ex: Você é um especialista em...",
+                help="Prompt de sistema para novas sessões de chat"
+            )
+            st.session_state.session_system_prompt = custom_system_prompt
+            
+            # Ferramentas permitidas
+            available_tools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebFetch"]
+            selected_tools = st.multiselect(
+                "Ferramentas:",
+                available_tools,
+                default=st.session_state.get('session_tools', ["Read", "Write", "Edit"]),
+                help="Ferramentas que o Claude pode usar"
+            )
+            st.session_state.session_tools = selected_tools
+            
+            # Outras configurações
+            max_turns = st.number_input("Max Turnos:", value=20, min_value=1, max_value=100)
+            st.session_state.session_max_turns = max_turns
         
         st.divider()
         
@@ -486,8 +513,9 @@ def main():
                 st.success(f"🎯 **{successful_tests} teste(s) executado(s) com sucesso!** Sistema funcionando perfeitamente.")
     
     # Tabs principais
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "🧪 Testes de Resumo", 
+        "💬 Chat Ativo",
         "📝 Logs de Debug", 
         "📊 Métricas", 
         "📋 Resumos Salvos",
@@ -503,99 +531,96 @@ def main():
         with col1:
             st.subheader("📋 Sessões Disponíveis")
             
-            if st.button("🔄 Atualizar Lista", key="update_sessions_1", use_container_width=True):
-                sessions = get_available_sessions()
-                st.session_state.available_sessions = sessions
-            
-            if hasattr(st.session_state, 'available_sessions'):
-                sessions = st.session_state.available_sessions
+            # Atualização automática da lista de sessões
+            sessions = get_available_sessions()
+            st.session_state.available_sessions = sessions
                 
-                if sessions:
-                    session_options = []
-                    for session in sessions[:20]:  # Limita a 20 para performance
-                        display_name = f"{session['directory']} | {session['session_id'][:8]}..."
-                        session_options.append((display_name, session))
+            if sessions:
+                session_options = []
+                for session in sessions[:20]:  # Limita a 20 para performance
+                    display_name = f"{session['directory']} | {session['session_id'][:8]}..."
+                    session_options.append((display_name, session))
                     
-                    selected_idx = st.selectbox(
-                        "Selecionar Sessão:",
-                        range(len(session_options)),
-                        format_func=lambda i: session_options[i][0] if session_options else "Nenhuma"
-                    )
+                selected_idx = st.selectbox(
+                    "Selecionar Sessão:",
+                    range(len(session_options)),
+                    format_func=lambda i: session_options[i][0] if session_options else "Nenhuma"
+                )
                     
-                    if session_options:
-                        st.session_state.selected_session = session_options[selected_idx][1]
+                if session_options:
+                    st.session_state.selected_session = session_options[selected_idx][1]
+                    
+                    # Carregar e exibir conteúdo da sessão para edição
+                    selected_session = session_options[selected_idx][1]
+                    file_path = Path(selected_session.get('file_path', ''))
+                    
+                    # Carregar metadados da sessão
+                    if file_path.exists():
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                lines = f.readlines()
+                            
+                            # Extrair conversa de forma simplificada para estatísticas
+                            conversation_parts = []
+                            for line in lines:
+                                try:
+                                    data = json.loads(line.strip())
+                                    if data.get('type') == 'user':
+                                        message_content = data.get('message', {}).get('content', '')
+                                        conversation_parts.append(f"👤 Usuário: {message_content}")
+                                    elif data.get('type') == 'assistant':
+                                        message = data.get('message', {})
+                                        if isinstance(message.get('content'), list):
+                                            # Extrair texto dos blocos de conteúdo
+                                            text_parts = []
+                                            for block in message['content']:
+                                                if isinstance(block, dict) and block.get('type') == 'text':
+                                                    text_parts.append(block.get('text', ''))
+                                            content = ' '.join(text_parts)
+                                        else:
+                                            content = str(message.get('content', ''))
+                                        conversation_parts.append(f"🤖 Claude: {content}")
+                                except json.JSONDecodeError:
+                                    continue
+                            
+                            full_conversation = '\n\n'.join(conversation_parts)
+                            
+                            # Armazenar conversa original para uso posterior
+                            st.session_state.original_conversation = full_conversation
+                            
+                            # Informações sobre a sessão
+                            col_info1, col_info2 = st.columns(2)
+                            with col_info1:
+                                st.info(f"📊 {len(conversation_parts)} mensagens")
+                            with col_info2:
+                                st.info(f"📝 {len(full_conversation):,} caracteres")
+                            
+                        except Exception as e:
+                            st.error(f"❌ Erro ao ler arquivo: {str(e)}")
+                    else:
+                        st.error(f"❌ Arquivo não encontrado: {file_path}")
+                            
+                    # Área de Resumo Gerado com UI/UX melhorada
+                    if 'last_generated_summary' in st.session_state:
+                        summary_data = st.session_state.last_generated_summary
+                        is_success = summary_data.get('success', False)
                         
-                        # Carregar e exibir conteúdo da sessão para edição
-                        selected_session = session_options[selected_idx][1]
-                        file_path = Path(selected_session.get('file_path', ''))
+                        # Header adaptativo baseado no status
+                        header_color = "linear-gradient(135deg, #28a745 0%, #20c997 100%)" if is_success else "linear-gradient(135deg, #dc3545 0%, #fd7e14 100%)"
+                        status_icon = "✅" if is_success else "❌"
+                        status_text = "Resumo Gerado" if is_success else "Erro na Geração"
                         
-                        # Carregar metadados da sessão
-                        if file_path.exists():
-                            try:
-                                with open(file_path, 'r', encoding='utf-8') as f:
-                                    lines = f.readlines()
-                                
-                                # Extrair conversa de forma simplificada para estatísticas
-                                conversation_parts = []
-                                for line in lines:
-                                    try:
-                                        data = json.loads(line.strip())
-                                        if data.get('type') == 'user':
-                                            message_content = data.get('message', {}).get('content', '')
-                                            conversation_parts.append(f"👤 Usuário: {message_content}")
-                                        elif data.get('type') == 'assistant':
-                                            message = data.get('message', {})
-                                            if isinstance(message.get('content'), list):
-                                                # Extrair texto dos blocos de conteúdo
-                                                text_parts = []
-                                                for block in message['content']:
-                                                    if isinstance(block, dict) and block.get('type') == 'text':
-                                                        text_parts.append(block.get('text', ''))
-                                                content = ' '.join(text_parts)
-                                            else:
-                                                content = str(message.get('content', ''))
-                                            conversation_parts.append(f"🤖 Claude: {content}")
-                                    except json.JSONDecodeError:
-                                        continue
-                                
-                                full_conversation = '\n\n'.join(conversation_parts)
-                                
-                                # Armazenar conversa original para uso posterior
-                                st.session_state.original_conversation = full_conversation
-                                
-                                # Informações sobre a sessão
-                                col_info1, col_info2 = st.columns(2)
-                                with col_info1:
-                                    st.info(f"📊 {len(conversation_parts)} mensagens")
-                                with col_info2:
-                                    st.info(f"📝 {len(full_conversation):,} caracteres")
-                                
-                            except Exception as e:
-                                st.error(f"❌ Erro ao ler arquivo: {str(e)}")
-                        else:
-                            st.error(f"❌ Arquivo não encontrado: {file_path}")
-                            
-                        # Área de Resumo Gerado com UI/UX melhorada
-                        if 'last_generated_summary' in st.session_state:
-                            summary_data = st.session_state.last_generated_summary
-                            is_success = summary_data.get('success', False)
-                            
-                            # Header adaptativo baseado no status
-                            header_color = "linear-gradient(135deg, #28a745 0%, #20c997 100%)" if is_success else "linear-gradient(135deg, #dc3545 0%, #fd7e14 100%)"
-                            status_icon = "✅" if is_success else "❌"
-                            status_text = "Resumo Gerado" if is_success else "Erro na Geração"
-                            
-                            st.markdown(f"""
-                            <div style="background: {header_color}; 
-                                        color: white; padding: 20px; border-radius: 15px; margin: 20px 0;">
-                                <h3 style="margin: 0; display: flex; align-items: center;">
-                                    <span style="margin-right: 10px;">{status_icon}</span>
-                                    {status_text}
-                                </h3>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            if is_success:
+                        st.markdown(f"""
+                        <div style="background: {header_color}; 
+                                    color: white; padding: 20px; border-radius: 15px; margin: 20px 0;">
+                            <h3 style="margin: 0; display: flex; align-items: center;">
+                                <span style="margin-right: 10px;">{status_icon}</span>
+                                {status_text}
+                            </h3>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        if is_success:
                                 # Card de sucesso
                                 st.markdown(f"""
                                 <div style="background: white; border-radius: 15px; padding: 25px; 
@@ -626,21 +651,52 @@ def main():
                                 # Área de texto com melhor formatação
                                 summary_content = summary_data.get('result', {}).get('summary', 'N/A')
                                 
-                                # Processar markdown para HTML
+                                # Parser de markdown melhorado para resumos
                                 import re
                                 
-                                # Converter markdown para HTML
-                                html_content = summary_content
-                                # Headers
-                                html_content = re.sub(r'^## (.*?)$', r'<h3 style="color: #667eea; margin: 20px 0 10px 0; font-weight: bold;">\1</h3>', html_content, flags=re.MULTILINE)
-                                # Bold
-                                html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #333;">\1</strong>', html_content)
-                                # Separadores
-                                html_content = re.sub(r'^---$', r'<hr style="border: none; border-top: 2px solid #e9ecef; margin: 20px 0;">', html_content, flags=re.MULTILINE)
-                                # Quebras de linha
-                                html_content = html_content.replace('\n', '<br>')
-                                # Emojis com espaçamento
-                                html_content = re.sub(r'(📋|🎯|✅|🔧)', r'<span style="margin-right: 8px;">\1</span>', html_content)
+                                def parse_summary_markdown(content: str) -> str:
+                                    """Parser robusto para formatação de resumos"""
+                                    html = content
+                                    
+                                    # Headers (## título)
+                                    html = re.sub(r'^## (.*?)$', 
+                                                 r'<h3 style="color: #667eea; margin: 25px 0 15px 0; font-weight: bold; font-size: 18px; border-bottom: 2px solid #f0f0f0; padding-bottom: 8px;">\1</h3>', 
+                                                 html, flags=re.MULTILINE)
+                                    
+                                    # Bold com emojis (📋 **texto**)
+                                    html = re.sub(r'(📋|🎯|✅|🔧|⚙️|💡|🔄)\s*\*\*(.*?)\*\*:', 
+                                                 r'<div style="margin: 15px 0;"><span style="font-size: 16px; margin-right: 10px;">\1</span><strong style="color: #333; font-size: 15px;">\2:</strong></div>', 
+                                                 html)
+                                    
+                                    # Bold simples
+                                    html = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #333;">\1</strong>', html)
+                                    
+                                    # Separadores horizontais
+                                    html = re.sub(r'^---$', r'<hr style="border: none; border-top: 2px solid #e9ecef; margin: 25px 0;">', html, flags=re.MULTILINE)
+                                    
+                                    # Listas com bullet points (• item)
+                                    html = re.sub(r'^• (.*?)$', r'<div style="margin: 8px 0 8px 20px; color: #555;"><span style="color: #667eea; margin-right: 8px;">•</span>\1</div>', html, flags=re.MULTILINE)
+                                    
+                                    # Código inline (`código`)
+                                    html = re.sub(r'`(.*?)`', r'<code style="background: #f8f9fa; padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #e83e8c;">\1</code>', html)
+                                    
+                                    # Emojis isolados com espaçamento
+                                    html = re.sub(r'^(📋|🎯|✅|🔧|⚙️|💡|🔄|📊|💰)', r'<span style="display: inline-block; margin-right: 8px; font-size: 16px;">\1</span>', html, flags=re.MULTILINE)
+                                    
+                                    # Quebras de linha duplas para parágrafos
+                                    html = re.sub(r'\n\s*\n', '</p><p style="margin: 15px 0; line-height: 1.6;">', html)
+                                    
+                                    # Quebras simples
+                                    html = html.replace('\n', '<br>')
+                                    
+                                    # Envolver em parágrafo se não começar com tag
+                                    if not html.strip().startswith('<'):
+                                        html = f'<p style="margin: 15px 0; line-height: 1.6;">{html}</p>'
+                                    
+                                    return html
+                                
+                                # Aplicar parser melhorado
+                                html_content = parse_summary_markdown(summary_content)
                                 
                                 st.markdown(f"""
                                 <div style="background: #ffffff; border: 2px solid #e9ecef; border-radius: 12px; 
@@ -722,9 +778,9 @@ def main():
                                             st.warning("⚠️ Nenhuma nova sessão foi detectada durante esta geração")
                                             st.info("💡 Isso pode acontecer se a geração não criou uma nova conversa ou se houve erro na detecção")
                             
-                            else:
-                                # Card de erro
-                                st.markdown(f"""
+                        else:
+                            # Card de erro
+                            st.markdown(f"""
                                 <div style="background: #f8d7da; border-radius: 15px; padding: 25px; 
                                             box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-left: 5px solid #dc3545; margin: 20px 0;">
                                     <div style="color: #721c24;">
@@ -740,56 +796,56 @@ def main():
                                 </div>
                                 """, unsafe_allow_html=True)
                                 
-                                # Botões de ação também para erros
-                                col_error1, col_error2 = st.columns(2)
-                                
-                                with col_error1:
-                                    if st.button("🔗 Ver Nova Conversa", key="show_new_conversation_error", use_container_width=True):
-                                        created_session = summary_data.get('new_session_created')
+                            # Botões de ação também para erros
+                            col_error1, col_error2 = st.columns(2)
+                            
+                            with col_error1:
+                                if st.button("🔗 Ver Nova Conversa", key="show_new_conversation_error", use_container_width=True):
+                                    created_session = summary_data.get('new_session_created')
+                                    
+                                    if created_session:
+                                        new_conversation_url = f"http://localhost:3041/{created_session['directory']}/{created_session['session_id']}"
                                         
-                                        if created_session:
-                                            new_conversation_url = f"http://localhost:3041/{created_session['directory']}/{created_session['session_id']}"
-                                            
-                                            st.markdown(f"""
-                                            **🔗 Nova Conversa (mesmo com erro):**
-                                            
-                                            [{new_conversation_url}]({new_conversation_url})
-                                            """)
-                                            st.info(f"📍 **Diretório:** `{created_session['directory']}`")
-                                            st.info(f"🆔 **ID:** `{created_session['session_id']}`")
-                                            st.info("💡 **Uma nova sessão foi criada mesmo com o erro**")
-                                        else:
-                                            st.warning("⚠️ Nenhuma nova sessão foi criada durante este erro")
-                                
-                                with col_error2:
-                                    if st.button("🗑️ Limpar Erro", key="clear_error", use_container_width=True):
-                                        del st.session_state.last_generated_summary
-                                        st.success("✅ Erro removido da visualização!")
-                                        st.rerun()
+                                        st.markdown(f"""
+                                        **🔗 Nova Conversa (mesmo com erro):**
+                                        
+                                        [{new_conversation_url}]({new_conversation_url})
+                                        """)
+                                        st.info(f"📍 **Diretório:** `{created_session['directory']}`")
+                                        st.info(f"🆔 **ID:** `{created_session['session_id']}`")
+                                        st.info("💡 **Uma nova sessão foi criada mesmo com o erro**")
+                                    else:
+                                        st.warning("⚠️ Nenhuma nova sessão foi criada durante este erro")
+                            
+                            with col_error2:
+                                if st.button("🗑️ Limpar Erro", key="clear_error", use_container_width=True):
+                                    del st.session_state.last_generated_summary
+                                    st.success("✅ Erro removido da visualização!")
+                                    st.rerun()
                             
                         
-                        else:
-                            # Estado quando não há resumo gerado
-                            st.markdown("""
-                            <div style="background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 15px; 
-                                        padding: 40px; text-align: center; margin: 20px 0;">
-                                <div style="color: #6c757d; font-size: 48px; margin-bottom: 15px;">📄</div>
-                                <h3 style="color: #6c757d; margin: 0 0 10px 0;">Nenhum Resumo Gerado</h3>
-                                <p style="color: #6c757d; margin: 10px 0; font-size: 16px;">Execute um teste para ver o resumo aqui</p>
-                                <div style="margin-top: 20px;">
-                                    <span style="color: #adb5bd;">⬆️ Selecione uma sessão acima e clique em "🚀 Executar Teste"</span>
-                                </div>
+                    else:
+                        # Estado quando não há resumo gerado
+                        st.markdown("""
+                        <div style="background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 15px; 
+                                    padding: 40px; text-align: center; margin: 20px 0;">
+                            <div style="color: #6c757d; font-size: 48px; margin-bottom: 15px;">📄</div>
+                            <h3 style="color: #6c757d; margin: 0 0 10px 0;">Nenhum Resumo Gerado</h3>
+                            <p style="color: #6c757d; margin: 10px 0; font-size: 16px;">Execute um teste para ver o resumo aqui</p>
+                            <div style="margin-top: 20px;">
+                                <span style="color: #adb5bd;">⬆️ Selecione uma sessão acima e clique em "🚀 Executar Teste"</span>
                             </div>
-                            """, unsafe_allow_html=True)
-                            
-                            # Botão para limpar estado se houver dados antigos
-                            if st.button("🗑️ Limpar Cache de Resumos", key="clear_summary_cache"):
-                                # Limpar qualquer estado antigo
-                                keys_to_remove = [k for k in st.session_state.keys() if 'summary' in k.lower()]
-                                for key in keys_to_remove:
-                                    del st.session_state[key]
-                                st.success("✅ Cache limpo!")
-                                st.rerun()
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Botão para limpar estado se houver dados antigos
+                        if st.button("🗑️ Limpar Cache de Resumos", key="clear_summary_cache"):
+                            # Limpar qualquer estado antigo
+                            keys_to_remove = [k for k in st.session_state.keys() if 'summary' in k.lower()]
+                            for key in keys_to_remove:
+                                del st.session_state[key]
+                            st.success("✅ Cache limpo!")
+                            st.rerun()
                 else:
                     st.warning("⚠️ Nenhuma sessão encontrada")
             else:
@@ -945,6 +1001,8 @@ CONVERSA PARA ANÁLISE:
                         # Salvar resumo para exibição na UI melhorada
                         st.session_state.last_generated_summary = test_result
                         
+                        # Forçar atualização da interface para mostrar o resumo automaticamente
+                        st.rerun()
                     else:
                         error_msg = result.get('error', 'Erro desconhecido')
                         st.error(f"❌ Erro no resumo: {error_msg}")
@@ -973,11 +1031,210 @@ CONVERSA PARA ANÁLISE:
                         
                         # Salvar erro para exibição na UI
                         st.session_state.last_generated_summary = test_result
+                        
+                        # Forçar atualização da interface para mostrar o erro automaticamente
+                        st.rerun()
             else:
                 st.info("📋 Selecione uma sessão para testar")
     
-    # Tab 2: Logs de Debug
+    # Tab 2: Chat Ativo
     with tab2:
+        st.header("💬 Chat Interativo com API Principal")
+        
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.subheader("🚀 Configuração do Chat")
+            
+            # URL da API principal
+            api_url = st.text_input("URL da API Principal:", value="http://localhost:8990", help="API principal para chat ativo")
+            
+            # Teste de conexão com API principal
+            if st.button("🔍 Testar Conexão API", use_container_width=True):
+                try:
+                    test_response = requests.get(f"{api_url}/health", timeout=5)
+                    if test_response.status_code == 200:
+                        st.success("✅ API Principal Online!")
+                        st.session_state.api_connected = True
+                    else:
+                        st.error(f"❌ API retornou: {test_response.status_code}")
+                        st.session_state.api_connected = False
+                except Exception as e:
+                    st.error(f"❌ Erro de conexão: {str(e)}")
+                    st.session_state.api_connected = False
+            
+            # Criar nova sessão
+            col_create1, col_create2 = st.columns(2)
+            
+            with col_create1:
+                if st.button("🆕 Sessão Simples", use_container_width=True):
+                    if st.session_state.get('api_connected', False):
+                        try:
+                            response = requests.post(f"{api_url}/api/new-session", timeout=10)
+                            if response.status_code == 200:
+                                new_session = response.json()
+                                st.session_state.active_chat_session = new_session['session_id']
+                                st.success(f"✅ Sessão simples: {new_session['session_id'][:8]}...")
+                                add_debug_log("info", f"Nova sessão simples criada: {new_session['session_id']}")
+                            else:
+                                st.error("❌ Erro ao criar sessão")
+                        except Exception as e:
+                            st.error(f"❌ Erro: {str(e)}")
+                    else:
+                        st.warning("⚠️ Teste a conexão primeiro")
+            
+            with col_create2:
+                if st.button("⚙️ Sessão Config", use_container_width=True):
+                    if st.session_state.get('api_connected', False):
+                        try:
+                            # Usar configurações da sidebar
+                            config_data = {
+                                "system_prompt": st.session_state.get('session_system_prompt', ''),
+                                "allowed_tools": st.session_state.get('session_tools', ["Read", "Write"]),
+                                "max_turns": st.session_state.get('session_max_turns', 20),
+                                "permission_mode": "acceptEdits"
+                            }
+                            
+                            response = requests.post(f"{api_url}/api/session-with-config", json=config_data, timeout=10)
+                            if response.status_code == 200:
+                                new_session = response.json()
+                                st.session_state.active_chat_session = new_session['session_id']
+                                st.success(f"✅ Sessão config: {new_session['session_id'][:8]}...")
+                                add_debug_log("info", f"Nova sessão configurada criada: {new_session['session_id']}", {
+                                    "config": config_data
+                                })
+                            else:
+                                st.error("❌ Erro ao criar sessão configurada")
+                        except Exception as e:
+                            st.error(f"❌ Erro: {str(e)}")
+                    else:
+                        st.warning("⚠️ Teste a conexão primeiro")
+            
+            # Status da sessão ativa
+            if st.session_state.get('active_chat_session'):
+                st.info(f"🔗 **Sessão Ativa:** {st.session_state.active_chat_session[:8]}...")
+                
+                # Botão para limpar sessão
+                if st.button("🧹 Limpar Contexto", use_container_width=True):
+                    try:
+                        clear_data = {"session_id": st.session_state.active_chat_session}
+                        response = requests.post(f"{api_url}/api/clear", json=clear_data, timeout=10)
+                        if response.status_code == 200:
+                            st.success("✅ Contexto limpo!")
+                        else:
+                            st.error("❌ Erro ao limpar contexto")
+                    except Exception as e:
+                        st.error(f"❌ Erro: {str(e)}")
+        
+        with col2:
+            st.subheader("💭 Área de Chat")
+            
+            # Inicializar histórico de chat se não existir
+            if "chat_history" not in st.session_state:
+                st.session_state.chat_history = []
+            
+            # Container para histórico
+            chat_container = st.container()
+            
+            # Exibir histórico
+            with chat_container:
+                if st.session_state.chat_history:
+                    for i, msg in enumerate(st.session_state.chat_history):
+                        if msg['role'] == 'user':
+                            st.markdown(f"""
+                            <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 10px 0; text-align: right;">
+                                <strong>👤 Você:</strong> {msg['content']}
+                            </div>
+                            """, unsafe_allow_html=True)
+                        else:
+                            st.markdown(f"""
+                            <div style="background: #f5f5f5; padding: 10px; border-radius: 8px; margin: 10px 0;">
+                                <strong>🤖 Claude:</strong> {msg['content']}
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.info("💬 Histórico de chat aparecerá aqui")
+            
+            # Input de mensagem
+            user_input = st.text_area("Sua mensagem:", height=100, placeholder="Digite sua mensagem aqui...")
+            
+            # Botões de chat
+            col_chat1, col_chat2 = st.columns(2)
+            
+            with col_chat1:
+                if st.button("📤 Enviar", key="send_chat", use_container_width=True):
+                    if user_input.strip() and st.session_state.get('active_chat_session'):
+                        # Adicionar mensagem do usuário ao histórico
+                        st.session_state.chat_history.append({
+                            "role": "user",
+                            "content": user_input.strip()
+                        })
+                        
+                        # Enviar para API principal
+                        try:
+                            chat_data = {
+                                "message": user_input.strip(),
+                                "session_id": st.session_state.active_chat_session
+                            }
+                            
+                            # Fazer request streaming para API principal
+                            with st.spinner("🤖 Claude está pensando..."):
+                                response = requests.post(
+                                    f"{api_url}/api/chat", 
+                                    json=chat_data,
+                                    stream=True,
+                                    timeout=60
+                                )
+                                
+                                if response.status_code == 200:
+                                    claude_response = ""
+                                    for line in response.iter_lines():
+                                        if line:
+                                            line = line.decode('utf-8')
+                                            if line.startswith('data: '):
+                                                try:
+                                                    data = json.loads(line[6:])
+                                                    if data['type'] == 'content':
+                                                        claude_response += data.get('content', '')
+                                                    elif data['type'] == 'done':
+                                                        break
+                                                except json.JSONDecodeError:
+                                                    continue
+                                    
+                                    # Adicionar resposta do Claude ao histórico
+                                    if claude_response.strip():
+                                        st.session_state.chat_history.append({
+                                            "role": "assistant", 
+                                            "content": claude_response.strip()
+                                        })
+                                        
+                                        add_debug_log("info", "Mensagem de chat processada", {
+                                            "session_id": st.session_state.active_chat_session,
+                                            "user_message_length": len(user_input),
+                                            "claude_response_length": len(claude_response)
+                                        })
+                                        
+                                        st.rerun()
+                                else:
+                                    st.error(f"❌ Erro HTTP {response.status_code}")
+                        
+                        except Exception as e:
+                            st.error(f"❌ Erro no chat: {str(e)}")
+                            add_debug_log("error", f"Erro no chat ativo: {str(e)}")
+                    else:
+                        if not st.session_state.get('active_chat_session'):
+                            st.warning("⚠️ Crie uma sessão primeiro")
+                        else:
+                            st.warning("⚠️ Digite uma mensagem")
+            
+            with col_chat2:
+                if st.button("🗑️ Limpar Chat", key="clear_chat", use_container_width=True):
+                    st.session_state.chat_history = []
+                    st.success("✅ Histórico limpo!")
+                    st.rerun()
+    
+    # Tab 3: Logs de Debug
+    with tab3:
         st.header("📝 Logs de Debug")
         
         if not st.session_state.debug_mode:
@@ -1065,8 +1322,8 @@ CONVERSA PARA ANÁLISE:
         else:
             st.info("📋 Nenhum log de debug disponível")
     
-    # Tab 3: Métricas
-    with tab3:
+    # Tab 4: Métricas
+    with tab4:
         st.header("📊 Métricas de Performance")
         
         if st.session_state.test_results:
@@ -1153,8 +1410,8 @@ CONVERSA PARA ANÁLISE:
         else:
             st.info("📊 Execute alguns testes para ver métricas aqui")
     
-    # Tab 4: Resumos Salvos
-    with tab4:
+    # Tab 5: Resumos Salvos
+    with tab5:
         st.header("📋 Histórico de Resumos")
         
         col1, col2 = st.columns([2, 1])
@@ -1168,12 +1425,7 @@ CONVERSA PARA ANÁLISE:
             filter_directory = st.text_input("Diretório (opcional):", 
                                            placeholder="Ex: -home-suthub--claude-cc-sdk-chat-api")
             
-            col_f1, col_f2 = st.columns(2)
-            with col_f1:
-                limit_summaries = st.number_input("Limite:", value=20, min_value=5, max_value=100)
-            with col_f2:
-                if st.button("🔄 Atualizar Lista", key="update_summaries_1", use_container_width=True):
-                    st.rerun()
+            limit_summaries = st.number_input("Limite:", value=20, min_value=5, max_value=100)
         
         with col2:
             st.subheader("📊 Estatísticas")
@@ -1262,8 +1514,8 @@ CONVERSA PARA ANÁLISE:
             except Exception as e:
                 st.error(f"❌ Erro na comunicação: {str(e)}")
     
-    # Tab 5: Diagnóstico
-    with tab5:
+    # Tab 6: Diagnóstico
+    with tab6:
         st.header("🔧 Diagnóstico do Sistema")
         
         # Status geral
