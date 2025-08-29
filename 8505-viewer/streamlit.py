@@ -549,9 +549,52 @@ def main():
                     
                 if session_options:
                     st.session_state.selected_session = session_options[selected_idx][1]
+                    selected_session = session_options[selected_idx][1]
+                    
+                    # Botões de ação para a sessão selecionada
+                    col_action1, col_action2, col_action3 = st.columns(3)
+                    
+                    with col_action1:
+                        if st.button("🗑️ Deletar", key="delete_selected_session", use_container_width=True, type="secondary"):
+                            # Deletar a sessão selecionada
+                            try:
+                                delete_url = f"{VIEWER_URL}/api/session/{selected_session['directory']}/{selected_session['session_id']}"
+                                delete_response = requests.delete(delete_url, timeout=10)
+                            
+                                if delete_response.status_code == 200:
+                                    st.success(f"✅ Sessão {selected_session['session_id'][:8]}... deletada!")
+                                    
+                                    # Log da exclusão
+                                    add_debug_log("info", "Sessão deletada via seletor", {
+                                        "deleted_directory": selected_session['directory'],
+                                        "deleted_session_id": selected_session['session_id']
+                                    })
+                                    
+                                    # Limpar seleção atual e atualizar
+                                    st.session_state.selected_session = None
+                                    if 'last_generated_summary' in st.session_state:
+                                        del st.session_state.last_generated_summary
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ Erro ao deletar: HTTP {delete_response.status_code}")
+                                    add_debug_log("error", f"Erro ao deletar sessão: HTTP {delete_response.status_code}")
+                            
+                            except Exception as e:
+                                st.error(f"❌ Erro na exclusão: {str(e)}")
+                                add_debug_log("error", f"Erro na exclusão da sessão: {str(e)}")
+                    
+                    with col_action2:
+                        # Link direto para o viewer web
+                        viewer_url = f"http://localhost:3041/{selected_session['directory']}/{selected_session['session_id']}"
+                        st.markdown(f"[🌐 Abrir Web]({viewer_url})", unsafe_allow_html=True)
+                    
+                    with col_action3:
+                        if st.button("🔄 Recarregar", key="reload_session_data", use_container_width=True, type="secondary"):
+                            # Forçar recarregamento dos dados da sessão
+                            st.rerun()
+                    
                     
                     # Carregar e exibir conteúdo da sessão para edição
-                    selected_session = session_options[selected_idx][1]
                     file_path = Path(selected_session.get('file_path', ''))
                     
                     # Carregar metadados da sessão
@@ -605,48 +648,8 @@ def main():
                         summary_data = st.session_state.last_generated_summary
                         is_success = summary_data.get('success', False)
                         
-                        # Header adaptativo baseado no status
-                        header_color = "linear-gradient(135deg, #28a745 0%, #20c997 100%)" if is_success else "linear-gradient(135deg, #dc3545 0%, #fd7e14 100%)"
-                        status_icon = "✅" if is_success else "❌"
-                        status_text = "Resumo Gerado" if is_success else "Erro na Geração"
-                        
-                        st.markdown(f"""
-                        <div style="background: {header_color}; 
-                                    color: white; padding: 20px; border-radius: 15px; margin: 20px 0;">
-                            <h3 style="margin: 0; display: flex; align-items: center;">
-                                <span style="margin-right: 10px;">{status_icon}</span>
-                                {status_text}
-                            </h3>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
                         if is_success:
-                                # Card de sucesso
-                                st.markdown(f"""
-                                <div style="background: white; border-radius: 15px; padding: 25px; 
-                                            box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-left: 5px solid #28a745; margin: 20px 0;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                                        <div>
-                                            <h4 style="margin: 0; color: #333; display: flex; align-items: center;">
-                                                <span style="background: linear-gradient(45deg, #28a745, #20c997); 
-                                                             -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
-                                                             margin-right: 8px;">🔸</span>
-                                                {summary_data.get('summary_type', 'N/A').title()}
-                                            </h4>
-                                            <small style="color: #666;">⚡ Gerado em {summary_data.get('execution_time', 0):.2f}s</small>
-                                        </div>
-                                        <div style="text-align: right;">
-                                            <small style="color: #666;">
-                                                💰 ${summary_data.get('result', {}).get('metrics', {}).get('cost', 0):.6f}<br>
-                                                🔢 {summary_data.get('result', {}).get('metrics', {}).get('input_tokens', 0) + summary_data.get('result', {}).get('metrics', {}).get('output_tokens', 0)} tokens
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                # Conteúdo do resumo
-                                st.markdown("**📄 Conteúdo:**")
+                                # Apenas o conteúdo, sem headers ou informações extras
                                 
                                 # Área de texto com melhor formatação
                                 summary_content = summary_data.get('result', {}).get('summary', 'N/A')
@@ -856,13 +859,6 @@ def main():
             
             if st.session_state.selected_session:
                 session = st.session_state.selected_session
-                
-                st.info(f"""
-                **Sessão Selecionada:**
-                - 📁 Diretório: `{session['directory']}`
-                - 🆔 ID: `{session['session_id']}`
-                - 📄 Arquivo: `{session.get('file_path', 'N/A')}`
-                """)
                 
                 summary_type = st.selectbox(
                     "Tipo de Resumo:",
