@@ -1,0 +1,1 @@
+aqui é focado para API funcional e Debug não implemente nada no streamlit que não seja focado em debug 

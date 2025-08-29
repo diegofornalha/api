@@ -13,7 +13,7 @@ from typing import List, Dict, Optional
 
 # Configuração da página
 st.set_page_config(
-    page_title="Claude Chat - SDK Python",
+    page_title="Claude Chat",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -373,8 +373,8 @@ def main():
     # Cabeçalho
     st.markdown("""
     <div class="title-container">
-        <h1>🤖 Claude Chat - SDK Python (Versão Robusta)</h1>
-        <p>Interface Web com CLI Subprocess - Sem Conflitos Async</p>
+        <h1>🤖 Claude Chat</h1>
+        <p>Interface Web</p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -409,20 +409,6 @@ def main():
         st.metric("Tokens de Saída", f"{st.session_state.total_tokens['output']:,}")
         st.metric("Custo Total", f"${st.session_state.total_cost:.6f}")
         
-        # Informações
-        st.header("ℹ️ Informações")
-        st.info("""
-        **Versão Robusta:**
-        - Usa CLI subprocess (sem async)
-        - Conexão automática garantida
-        - Debug simplificado
-        - Performance otimizada
-        
-        **Como usar:**
-        1. Digite sua mensagem
-        2. Pressione Enviar
-        3. Aguarde a resposta
-        """)
     
     # Painel de Debug (se ativado)
     render_debug_panel()
@@ -541,8 +527,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style='text-align: center; color: #666; font-size: 0.8rem;'>
-        🚀 Claude Code SDK Python - Interface Streamlit Robusta<br>
-        Versão CLI Subprocess - Sem Conflitos Async
+        Claude Code SDK Python
     </div>
     """, unsafe_allow_html=True)
 
