@@ -575,60 +575,221 @@ def main():
                         else:
                             st.error(f"❌ Arquivo não encontrado: {file_path}")
                             
-                        # Sistema de Prompt Customizado
-                        st.subheader("🎯 Prompt System Customizado")
-                        
-                        # Exemplos de prompts pré-definidos
-                        prompt_examples = {
-                            "📋 Resumo Padrão": "",
-                            "🔧 Instruções Específicas": "Personalizado"
-                        }
-                        
-                        col_prompt1, col_prompt2 = st.columns([2, 1])
-                        
-                        with col_prompt1:
-                            prompt_choice = st.selectbox(
-                                "Escolher Prompt Pré-definido:",
-                                list(prompt_examples.keys()),
-                                help="Selecione um prompt pré-definido ou 'Personalizado' para criar o seu"
-                            )
-                        
-                        with col_prompt2:
-                            if st.button("💾 Salvar Prompt", key="save_prompt_1", use_container_width=True):
-                                st.session_state.prompt_saved = True
-                                st.success("✅ Prompt salvo!")
-                        
-                        # Campo de texto para prompt customizado
-                        if prompt_choice == "🔧 Instruções Específicas":
-                            custom_prompt = st.text_area(
-                                "Sistema Prompt Customizado:",
-                                value=st.session_state.get('custom_system_prompt', ''),
-                                height=150,
-                                placeholder="Ex: Analise esta conversa focando em X, Y e Z. Ignore detalhes sobre A e B. Estruture a resposta como...",
-                                help="Digite instruções específicas que serão enviadas junto com o resumo"
-                            )
-                            st.session_state.custom_system_prompt = custom_prompt
-                        else:
-                            # Usar prompt pré-definido
-                            st.session_state.custom_system_prompt = prompt_examples[prompt_choice]
-                            if prompt_examples[prompt_choice]:
-                                st.info(f"💡 **Prompt ativo:** {prompt_examples[prompt_choice]}")
-                        
-                        # Indicador de status do prompt
-                        if st.session_state.get('custom_system_prompt', ''):
-                            st.markdown("""
-                            <div style="background: #e7f3ff; border-left: 4px solid #1f77b4; padding: 10px; margin: 10px 0;">
-                                <strong>🎯 Sistema Prompt Ativo</strong><br>
-                                <small>Suas instruções personalizadas serão incluídas no resumo.</small>
+                        # Área de Resumo Gerado com UI/UX melhorada
+                        if 'last_generated_summary' in st.session_state:
+                            summary_data = st.session_state.last_generated_summary
+                            is_success = summary_data.get('success', False)
+                            
+                            # Header adaptativo baseado no status
+                            header_color = "linear-gradient(135deg, #28a745 0%, #20c997 100%)" if is_success else "linear-gradient(135deg, #dc3545 0%, #fd7e14 100%)"
+                            status_icon = "✅" if is_success else "❌"
+                            status_text = "Resumo Gerado" if is_success else "Erro na Geração"
+                            
+                            st.markdown(f"""
+                            <div style="background: {header_color}; 
+                                        color: white; padding: 20px; border-radius: 15px; margin: 20px 0;">
+                                <h3 style="margin: 0; display: flex; align-items: center;">
+                                    <span style="margin-right: 10px;">{status_icon}</span>
+                                    {status_text}
+                                </h3>
                             </div>
                             """, unsafe_allow_html=True)
+                            
+                            if is_success:
+                                # Card de sucesso
+                                st.markdown(f"""
+                                <div style="background: white; border-radius: 15px; padding: 25px; 
+                                            box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-left: 5px solid #28a745; margin: 20px 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                        <div>
+                                            <h4 style="margin: 0; color: #333; display: flex; align-items: center;">
+                                                <span style="background: linear-gradient(45deg, #28a745, #20c997); 
+                                                             -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
+                                                             margin-right: 8px;">🔸</span>
+                                                {summary_data.get('summary_type', 'N/A').title()}
+                                            </h4>
+                                            <small style="color: #666;">⚡ Gerado em {summary_data.get('execution_time', 0):.2f}s</small>
+                                        </div>
+                                        <div style="text-align: right;">
+                                            <small style="color: #666;">
+                                                💰 ${summary_data.get('result', {}).get('metrics', {}).get('cost', 0):.6f}<br>
+                                                🔢 {summary_data.get('result', {}).get('metrics', {}).get('input_tokens', 0) + summary_data.get('result', {}).get('metrics', {}).get('output_tokens', 0)} tokens
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Conteúdo do resumo
+                                st.markdown("**📄 Conteúdo:**")
+                                
+                                # Área de texto com melhor formatação
+                                summary_content = summary_data.get('result', {}).get('summary', 'N/A')
+                                
+                                # Processar markdown para HTML
+                                import re
+                                
+                                # Converter markdown para HTML
+                                html_content = summary_content
+                                # Headers
+                                html_content = re.sub(r'^## (.*?)$', r'<h3 style="color: #667eea; margin: 20px 0 10px 0; font-weight: bold;">\1</h3>', html_content, flags=re.MULTILINE)
+                                # Bold
+                                html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #333;">\1</strong>', html_content)
+                                # Separadores
+                                html_content = re.sub(r'^---$', r'<hr style="border: none; border-top: 2px solid #e9ecef; margin: 20px 0;">', html_content, flags=re.MULTILINE)
+                                # Quebras de linha
+                                html_content = html_content.replace('\n', '<br>')
+                                # Emojis com espaçamento
+                                html_content = re.sub(r'(📋|🎯|✅|🔧)', r'<span style="margin-right: 8px;">\1</span>', html_content)
+                                
+                                st.markdown(f"""
+                                <div style="background: #ffffff; border: 2px solid #e9ecef; border-radius: 12px; 
+                                            padding: 25px; margin: 15px 0; font-family: 'Segoe UI', Arial, sans-serif;
+                                            line-height: 1.8; color: #212529; font-size: 15px;
+                                            box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+                                    {html_content}
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Botões de ação para sucesso
+                                col_action1, col_action2, col_action3 = st.columns(3)
+                                
+                                with col_action1:
+                                    if st.button("📋 Copiar Conteúdo", key="copy_improved", use_container_width=True):
+                                        st.success("✅ Use Ctrl+A e Ctrl+C na área de texto acima")
+                                
+                                with col_action2:
+                                    if st.button("🗑️ Deletar Sessão", key="delete_session", use_container_width=True):
+                                        # Deletar permanentemente a nova sessão criada
+                                        created_session = summary_data.get('new_session_created')
+                                        
+                                        if created_session:
+                                            try:
+                                                # Fazer DELETE request para a API
+                                                delete_url = f"{VIEWER_URL}/api/session/{created_session['directory']}/{created_session['session_id']}"
+                                                delete_response = requests.delete(delete_url, timeout=10)
+                                                
+                                                if delete_response.status_code == 200:
+                                                    st.success(f"✅ Sessão {created_session['session_id'][:8]}... deletada permanentemente!")
+                                                    
+                                                    # Log da exclusão
+                                                    add_debug_log("info", "Sessão criada foi deletada permanentemente", {
+                                                        "deleted_directory": created_session['directory'],
+                                                        "deleted_session_id": created_session['session_id'],
+                                                        "delete_url": delete_url
+                                                    })
+                                                    
+                                                    # Remover da visualização também
+                                                    del st.session_state.last_generated_summary
+                                                    st.rerun()
+                                                else:
+                                                    st.error(f"❌ Erro ao deletar: HTTP {delete_response.status_code}")
+                                                    add_debug_log("error", f"Erro ao deletar sessão: HTTP {delete_response.status_code}")
+                                            
+                                            except Exception as e:
+                                                st.error(f"❌ Erro na exclusão: {str(e)}")
+                                                add_debug_log("error", f"Erro na exclusão da sessão: {str(e)}")
+                                        else:
+                                            st.warning("⚠️ Nenhuma nova sessão para deletar")
+                                            # Apenas remover da visualização se não há sessão para deletar
+                                            del st.session_state.last_generated_summary
+                                            st.rerun()
+                                
+                                with col_action3:
+                                    if st.button("🔗 Nova Conversa", key="show_new_conversation", use_container_width=True):
+                                        # Usar a sessão específica criada durante esta geração
+                                        created_session = summary_data.get('new_session_created')
+                                        
+                                        if created_session:
+                                            new_conversation_url = f"http://localhost:3041/{created_session['directory']}/{created_session['session_id']}"
+                                            
+                                            st.markdown(f"""
+                                            **🔗 Nova Conversa Criada por Esta Geração:**
+                                            
+                                            [{new_conversation_url}]({new_conversation_url})
+                                            """)
+                                            st.info(f"📍 **Diretório:** `{created_session['directory']}`")
+                                            st.info(f"🆔 **ID:** `{created_session['session_id']}`")
+                                            st.success("🎯 **Esta é a sessão exata criada durante a geração do resumo!**")
+                                            
+                                            # Log da nova conversa específica
+                                            add_debug_log("info", "Exibindo nova conversa específica", {
+                                                "specific_directory": created_session['directory'],
+                                                "specific_session_id": created_session['session_id'],
+                                                "conversation_url": new_conversation_url
+                                            })
+                                        else:
+                                            st.warning("⚠️ Nenhuma nova sessão foi detectada durante esta geração")
+                                            st.info("💡 Isso pode acontecer se a geração não criou uma nova conversa ou se houve erro na detecção")
+                            
+                            else:
+                                # Card de erro
+                                st.markdown(f"""
+                                <div style="background: #f8d7da; border-radius: 15px; padding: 25px; 
+                                            box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-left: 5px solid #dc3545; margin: 20px 0;">
+                                    <div style="color: #721c24;">
+                                        <h4 style="margin: 0 0 15px 0; display: flex; align-items: center;">
+                                            <span style="margin-right: 8px;">⚠️</span>
+                                            Erro na Geração do Resumo
+                                        </h4>
+                                        <div style="background: white; padding: 15px; border-radius: 8px; color: #333;">
+                                            <strong>Detalhes:</strong> {summary_data.get('error', 'Erro desconhecido')}<br>
+                                            <small><strong>Tempo:</strong> {summary_data.get('execution_time', 0):.2f}s</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Botões de ação também para erros
+                                col_error1, col_error2 = st.columns(2)
+                                
+                                with col_error1:
+                                    if st.button("🔗 Ver Nova Conversa", key="show_new_conversation_error", use_container_width=True):
+                                        created_session = summary_data.get('new_session_created')
+                                        
+                                        if created_session:
+                                            new_conversation_url = f"http://localhost:3041/{created_session['directory']}/{created_session['session_id']}"
+                                            
+                                            st.markdown(f"""
+                                            **🔗 Nova Conversa (mesmo com erro):**
+                                            
+                                            [{new_conversation_url}]({new_conversation_url})
+                                            """)
+                                            st.info(f"📍 **Diretório:** `{created_session['directory']}`")
+                                            st.info(f"🆔 **ID:** `{created_session['session_id']}`")
+                                            st.info("💡 **Uma nova sessão foi criada mesmo com o erro**")
+                                        else:
+                                            st.warning("⚠️ Nenhuma nova sessão foi criada durante este erro")
+                                
+                                with col_error2:
+                                    if st.button("🗑️ Limpar Erro", key="clear_error", use_container_width=True):
+                                        del st.session_state.last_generated_summary
+                                        st.success("✅ Erro removido da visualização!")
+                                        st.rerun()
+                            
+                        
                         else:
+                            # Estado quando não há resumo gerado
                             st.markdown("""
-                            <div style="background: #f8f9fa; border-left: 4px solid #6c757d; padding: 10px; margin: 10px 0;">
-                                <strong>📋 Modo Padrão</strong><br>
-                                <small>Resumo será gerado com instruções padrão.</small>
+                            <div style="background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 15px; 
+                                        padding: 40px; text-align: center; margin: 20px 0;">
+                                <div style="color: #6c757d; font-size: 48px; margin-bottom: 15px;">📄</div>
+                                <h3 style="color: #6c757d; margin: 0 0 10px 0;">Nenhum Resumo Gerado</h3>
+                                <p style="color: #6c757d; margin: 10px 0; font-size: 16px;">Execute um teste para ver o resumo aqui</p>
+                                <div style="margin-top: 20px;">
+                                    <span style="color: #adb5bd;">⬆️ Selecione uma sessão acima e clique em "🚀 Executar Teste"</span>
+                                </div>
                             </div>
                             """, unsafe_allow_html=True)
+                            
+                            # Botão para limpar estado se houver dados antigos
+                            if st.button("🗑️ Limpar Cache de Resumos", key="clear_summary_cache"):
+                                # Limpar qualquer estado antigo
+                                keys_to_remove = [k for k in st.session_state.keys() if 'summary' in k.lower()]
+                                for key in keys_to_remove:
+                                    del st.session_state[key]
+                                st.success("✅ Cache limpo!")
+                                st.rerun()
                 else:
                     st.warning("⚠️ Nenhuma sessão encontrada")
             else:
@@ -649,19 +810,28 @@ def main():
                 
                 summary_type = st.selectbox(
                     "Tipo de Resumo:",
-                    ["bullet_points", "conciso", "detalhado"],  # bullet_points em primeiro
+                    ["conciso", "bullet_points", "detalhado"],  # conciso em primeiro
                     help="Escolha o formato de resumo desejado"
                 )
                 
                 # Explicação dos tipos
-                if summary_type == "bullet_points":
-                    st.info("🔸 **Bullet Points**: Lista organizada por tópicos com pontos principais da conversa")
-                elif summary_type == "conciso":
+                if summary_type == "conciso":
                     st.info("📋 **Conciso**: Resumo estruturado em até 20 palavras apenas com contexto, objetivo, resultado e tecnologias")
+                elif summary_type == "bullet_points":
+                    st.info("🔸 **Bullet Points**: Lista organizada por tópicos com pontos principais da conversa")
                 else:
                     st.info("📖 **Detalhado**: Análise completa em até 400 palavras incluindo implementação, insights e próximos passos")
                 
                 if st.button("🚀 Executar Teste de Resumo", key="exec_test_1", use_container_width=True):
+                    # Capturar lista de sessões ANTES da geração
+                    sessions_before = []
+                    try:
+                        response = requests.get(f"{VIEWER_URL}/api/sessions", timeout=10)
+                        if response.status_code == 200:
+                            sessions_before = [s['session_id'] for s in response.json()]
+                    except:
+                        pass
+                    
                     # Verificar se há conversa original e prompt customizado
                     has_conversation = hasattr(st.session_state, 'original_conversation') and st.session_state.original_conversation
                     has_custom_prompt = st.session_state.get('custom_system_prompt', '').strip()
@@ -673,10 +843,11 @@ def main():
                         "directory": session['directory'],
                         "summary_type": summary_type,
                         "has_custom_prompt": bool(has_custom_prompt),
-                        "enhanced_mode": use_enhanced_mode
+                        "enhanced_mode": use_enhanced_mode,
+                        "sessions_before_count": len(sessions_before)
                     })
                     
-                    with st.spinner("🤖 Gerando resumo com instruções personalizadas..."):
+                    with st.spinner("🤖 Gerando resumo..."):
                         if use_enhanced_mode:
                             # Combinar prompt customizado com conversa
                             enhanced_content = f"""INSTRUÇÕES ESPECÍFICAS: {has_custom_prompt}
@@ -701,6 +872,28 @@ CONVERSA PARA ANÁLISE:
                                 session['session_id'],
                                 summary_type
                             )
+                        
+                        # Capturar lista de sessões APÓS a geração para detectar nova sessão
+                        new_session_created = None
+                        try:
+                            response = requests.get(f"{VIEWER_URL}/api/sessions", timeout=10)
+                            if response.status_code == 200:
+                                sessions_after = response.json()
+                                sessions_after_ids = [s['session_id'] for s in sessions_after]
+                                
+                                # Encontrar nova sessão criada
+                                new_session_ids = set(sessions_after_ids) - set(sessions_before)
+                                if new_session_ids:
+                                    new_session_id = list(new_session_ids)[0]
+                                    new_session_created = next(s for s in sessions_after if s['session_id'] == new_session_id)
+                                    
+                                    add_debug_log("info", f"Nova sessão detectada: {new_session_id}", {
+                                        "new_session": new_session_created,
+                                        "sessions_before": len(sessions_before),
+                                        "sessions_after": len(sessions_after)
+                                    })
+                        except Exception as e:
+                            add_debug_log("warning", f"Erro ao detectar nova sessão: {str(e)}")
                     
                     if success:
                         # Mensagem de sucesso personalizada
@@ -718,101 +911,6 @@ CONVERSA PARA ANÁLISE:
                             "used_custom_prompt": use_enhanced_mode
                         })
                         
-                        # Exibe resumo
-                        with st.expander("📝 Resumo Gerado", expanded=True):
-                            # Link direto no topo do resumo
-                            viewer_url = f"http://localhost:3041/{session['directory']}/{session['session_id']}/resumo?tipo={summary_type}"
-                            
-                            st.markdown(f"""
-                            <div style="background: #f0f8ff; border: 1px solid #b6d7ff; padding: 10px; border-radius: 5px; margin-bottom: 15px; text-align: center;">
-                                <strong>🔗 Link Direto:</strong> 
-                                <a href="{viewer_url}" target="_blank" style="color: #0066cc; text-decoration: none;">
-                                    📄 Abrir no Viewer Web →
-                                </a>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            
-                            st.text_area(
-                                "Conteúdo:",
-                                result.get('summary', 'N/A'),
-                                height=200,
-                                disabled=True
-                            )
-                            
-                            # Botão para visualizar no viewer web
-                            col_btn1, col_btn2 = st.columns(2)
-                            
-                            with col_btn1:
-                                # Gerar URL do viewer
-                                viewer_url = f"http://localhost:3041/{session['directory']}/{session['session_id']}/resumo?tipo={summary_type}"
-                                
-                                if st.button("🌐 Ver no Viewer Web", key="view_web_1", use_container_width=True):
-                                    # Testar se a URL está acessível
-                                    try:
-                                        test_response = requests.get(f"{VIEWER_URL}/api/sessions", timeout=3)
-                                        if test_response.status_code == 200:
-                                            st.markdown(f"""
-                                            **🔗 URL do Viewer (clique para abrir):**
-                                            
-                                            [{viewer_url}]({viewer_url})
-                                            """)
-                                            
-                                            st.success("🌐 **Viewer Web disponível!** Clique no link acima ou copie a URL")
-                                            
-                                            # Informações adicionais
-                                            st.markdown(f"""
-                                            <div style="background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0;">
-                                                <strong>📋 Parâmetros da URL:</strong><br>
-                                                • Diretório: <code>{session['directory']}</code><br>
-                                                • Sessão: <code>{session['session_id']}</code><br>
-                                                • Tipo: <code>{summary_type}</code>
-                                            </div>
-                                            """, unsafe_allow_html=True)
-                                        else:
-                                            st.error("❌ Viewer web não está respondendo")
-                                            st.code(viewer_url)
-                                    except Exception as e:
-                                        st.warning("⚠️ Não foi possível verificar o viewer web")
-                                        st.markdown(f"""
-                                        **🔗 URL do Viewer:**
-                                        ```
-                                        {viewer_url}
-                                        ```
-                                        """)
-                                        st.info("💡 Copie e cole esta URL no navegador")
-                                    
-                                    # Log do acesso
-                                    add_debug_log("info", "URL do viewer gerada", {
-                                        "session_id": session['session_id'],
-                                        "directory": session['directory'],
-                                        "summary_type": summary_type,
-                                        "viewer_url": viewer_url
-                                    })
-                            
-                            with col_btn2:
-                                if st.button("📋 Copiar Resumo", key="copy_summary_1", use_container_width=True):
-                                    # Simular funcionalidade de copiar (em uma implementação real usaria JavaScript)
-                                    st.success("✅ Use Ctrl+A e Ctrl+C na área de texto acima para copiar")
-                                    add_debug_log("info", "Usuário solicitou cópia do resumo")
-                            
-                            # Se um prompt personalizado foi usado, mostrar informação adicional
-                            if use_enhanced_mode:
-                                st.markdown("""
-                                <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin: 10px 0;">
-                                    <strong>⚠️ Atenção:</strong> Este resumo foi gerado com instruções personalizadas.<br>
-                                    <small>A URL do viewer web mostrará o resumo padrão, não o personalizado.</small>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                # Botão para exibir o prompt usado
-                                if st.button("🔍 Ver Prompt Aplicado", key="view_prompt_1"):
-                                    st.markdown(f"""
-                                    **🎯 Prompt personalizado usado:**
-                                    ```
-                                    {has_custom_prompt}
-                                    ```
-                                    """)
-                                    st.info("💡 Para obter o mesmo resultado no viewer web, você precisaria configurar instruções similares")
                         
                         # Métricas
                         metrics = result.get('metrics', {})
@@ -825,7 +923,7 @@ CONVERSA PARA ANÁLISE:
                         with col_c:
                             st.metric("Custo", f"${metrics.get('cost', 0):.6f}")
                         
-                        # Salva resultado para análise (incluindo prompt customizado se houver)
+                        # Salva resultado para análise (incluindo prompt customizado e nova sessão)
                         test_result = {
                             "timestamp": datetime.now().isoformat(),
                             "session": session,
@@ -833,7 +931,8 @@ CONVERSA PARA ANÁLISE:
                             "execution_time": exec_time,
                             "summary_type": summary_type,
                             "success": True,
-                            "custom_prompt": st.session_state.get('custom_system_prompt', '') if use_enhanced_mode else None
+                            "custom_prompt": st.session_state.get('custom_system_prompt', '') if use_enhanced_mode else None,
+                            "new_session_created": new_session_created  # A sessão específica criada por esta geração
                         }
                         
                         # Chave única incluindo prompt se houver
@@ -842,6 +941,9 @@ CONVERSA PARA ANÁLISE:
                             result_key += f"_custom_{hash(has_custom_prompt) % 10000}"
                         
                         st.session_state.test_results[result_key] = test_result
+                        
+                        # Salvar resumo para exibição na UI melhorada
+                        st.session_state.last_generated_summary = test_result
                         
                     else:
                         error_msg = result.get('error', 'Erro desconhecido')
@@ -856,7 +958,7 @@ CONVERSA PARA ANÁLISE:
                             "error_details": result
                         })
                         
-                        # Salva resultado do erro para análise
+                        # Salva resultado do erro para análise (incluindo nova sessão se criada)
                         test_result = {
                             "timestamp": datetime.now().isoformat(),
                             "session": session,
@@ -864,13 +966,13 @@ CONVERSA PARA ANÁLISE:
                             "execution_time": exec_time,
                             "summary_type": summary_type,
                             "success": False,
-                            "error": error_msg
+                            "error": error_msg,
+                            "new_session_created": new_session_created  # Mesmo em erro pode ter criado sessão
                         }
                         st.session_state.test_results[f"{session['session_id']}_{summary_type}"] = test_result
                         
-                        # Exibir detalhes do erro
-                        with st.expander("🔍 Detalhes do Erro"):
-                            st.json(result)
+                        # Salvar erro para exibição na UI
+                        st.session_state.last_generated_summary = test_result
             else:
                 st.info("📋 Selecione uma sessão para testar")
     
