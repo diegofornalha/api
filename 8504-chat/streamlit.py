@@ -91,7 +91,7 @@ st.markdown("""
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "debug_mode" not in st.session_state:
-    st.session_state.debug_mode = False
+    st.session_state.debug_mode = True  # Ativado por padrão
 if "debug_logs" not in st.session_state:
     st.session_state.debug_logs = []
 if "total_tokens" not in st.session_state:

@@ -416,7 +416,7 @@ def main():
             debug_level = st.selectbox(
                 "Nível de Debug",
                 ["info", "warning", "error", "all"],
-                index=0,
+                index=3,  # "all" selecionado por padrão
                 help="Mostra mais detalhes técnicos quando ativo"
             )
             
@@ -441,7 +441,7 @@ def main():
             selected_tools = st.multiselect(
                 "Ferramentas:",
                 available_tools,
-                default=st.session_state.get('session_tools', ["Read", "Write", "Edit"]),
+                default=st.session_state.get('session_tools', available_tools),  # Todos selecionados por padrão
                 help="Ferramentas que o Claude pode usar"
             )
             st.session_state.session_tools = selected_tools
@@ -485,19 +485,6 @@ def main():
             
             st.metric("Testes", recent_tests, delta=f"{success_rate:.0f}% sucesso")
         
-        # Mensagem de sucesso da implementação
-        if recent_errors == 0 and len(st.session_state.test_results) == 0:
-            st.markdown("""
-            <div style="background: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; padding: 15px; border-radius: 5px; margin-bottom: 15px;">
-                <strong>🎉 API de Resumo Implementada com Sucesso!</strong><br>
-                <small>
-                ✅ Claude SDK integrado via subprocess<br>
-                ✅ Leitura de arquivos .jsonl funcionando<br>
-                ✅ Geração de resumos estruturados ativa<br>
-                📋 Execute um teste na aba "Testes de Resumo" para começar!
-                </small>
-            </div>
-            """, unsafe_allow_html=True)
         
         # Alertas importantes na página principal
         if recent_errors > 0:
@@ -513,13 +500,10 @@ def main():
                 st.success(f"🎯 **{successful_tests} teste(s) executado(s) com sucesso!** Sistema funcionando perfeitamente.")
     
     # Tabs principais
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "🧪 Testes de Resumo", 
-        "💬 Chat Ativo",
         "📝 Logs de Debug", 
-        "📊 Métricas", 
-        "📋 Resumos Salvos",
-        "🔧 Diagnóstico"
+        "📊 Métricas"
     ])
     
     # Tab 1: Testes de Resumo
@@ -701,6 +685,7 @@ def main():
                                 # Aplicar parser melhorado
                                 html_content = parse_summary_markdown(summary_content)
                                 
+                                # Mostrar apenas o conteúdo limpo
                                 st.markdown(f"""
                                 <div style="background: #ffffff; border: 2px solid #e9ecef; border-radius: 12px; 
                                             padding: 25px; margin: 15px 0; font-family: 'Segoe UI', Arial, sans-serif;
@@ -1011,204 +996,8 @@ CONVERSA PARA ANÁLISE:
             else:
                 st.info("📋 Selecione uma sessão para testar")
     
-    # Tab 2: Chat Ativo
+    # Tab 2: Logs de Debug
     with tab2:
-        st.header("💬 Chat Interativo com API Principal")
-        
-        col1, col2 = st.columns([1, 1])
-        
-        with col1:
-            st.subheader("🚀 Configuração do Chat")
-            
-            # URL da API principal
-            api_url = st.text_input("URL da API Principal:", value="http://localhost:8990", help="API principal para chat ativo")
-            
-            # Teste de conexão com API principal
-            if st.button("🔍 Testar Conexão API", use_container_width=True):
-                try:
-                    test_response = requests.get(f"{api_url}/health", timeout=5)
-                    if test_response.status_code == 200:
-                        st.success("✅ API Principal Online!")
-                        st.session_state.api_connected = True
-                    else:
-                        st.error(f"❌ API retornou: {test_response.status_code}")
-                        st.session_state.api_connected = False
-                except Exception as e:
-                    st.error(f"❌ Erro de conexão: {str(e)}")
-                    st.session_state.api_connected = False
-            
-            # Criar nova sessão
-            col_create1, col_create2 = st.columns(2)
-            
-            with col_create1:
-                if st.button("🆕 Sessão Simples", use_container_width=True):
-                    if st.session_state.get('api_connected', False):
-                        try:
-                            response = requests.post(f"{api_url}/api/new-session", timeout=10)
-                            if response.status_code == 200:
-                                new_session = response.json()
-                                st.session_state.active_chat_session = new_session['session_id']
-                                st.success(f"✅ Sessão simples: {new_session['session_id'][:8]}...")
-                                add_debug_log("info", f"Nova sessão simples criada: {new_session['session_id']}")
-                            else:
-                                st.error("❌ Erro ao criar sessão")
-                        except Exception as e:
-                            st.error(f"❌ Erro: {str(e)}")
-                    else:
-                        st.warning("⚠️ Teste a conexão primeiro")
-            
-            with col_create2:
-                if st.button("⚙️ Sessão Config", use_container_width=True):
-                    if st.session_state.get('api_connected', False):
-                        try:
-                            # Usar configurações da sidebar
-                            config_data = {
-                                "system_prompt": st.session_state.get('session_system_prompt', ''),
-                                "allowed_tools": st.session_state.get('session_tools', ["Read", "Write"]),
-                                "max_turns": st.session_state.get('session_max_turns', 20),
-                                "permission_mode": "acceptEdits"
-                            }
-                            
-                            response = requests.post(f"{api_url}/api/session-with-config", json=config_data, timeout=10)
-                            if response.status_code == 200:
-                                new_session = response.json()
-                                st.session_state.active_chat_session = new_session['session_id']
-                                st.success(f"✅ Sessão config: {new_session['session_id'][:8]}...")
-                                add_debug_log("info", f"Nova sessão configurada criada: {new_session['session_id']}", {
-                                    "config": config_data
-                                })
-                            else:
-                                st.error("❌ Erro ao criar sessão configurada")
-                        except Exception as e:
-                            st.error(f"❌ Erro: {str(e)}")
-                    else:
-                        st.warning("⚠️ Teste a conexão primeiro")
-            
-            # Status da sessão ativa
-            if st.session_state.get('active_chat_session'):
-                st.info(f"🔗 **Sessão Ativa:** {st.session_state.active_chat_session[:8]}...")
-                
-                # Botão para limpar sessão
-                if st.button("🧹 Limpar Contexto", use_container_width=True):
-                    try:
-                        clear_data = {"session_id": st.session_state.active_chat_session}
-                        response = requests.post(f"{api_url}/api/clear", json=clear_data, timeout=10)
-                        if response.status_code == 200:
-                            st.success("✅ Contexto limpo!")
-                        else:
-                            st.error("❌ Erro ao limpar contexto")
-                    except Exception as e:
-                        st.error(f"❌ Erro: {str(e)}")
-        
-        with col2:
-            st.subheader("💭 Área de Chat")
-            
-            # Inicializar histórico de chat se não existir
-            if "chat_history" not in st.session_state:
-                st.session_state.chat_history = []
-            
-            # Container para histórico
-            chat_container = st.container()
-            
-            # Exibir histórico
-            with chat_container:
-                if st.session_state.chat_history:
-                    for i, msg in enumerate(st.session_state.chat_history):
-                        if msg['role'] == 'user':
-                            st.markdown(f"""
-                            <div style="background: #e3f2fd; padding: 10px; border-radius: 8px; margin: 10px 0; text-align: right;">
-                                <strong>👤 Você:</strong> {msg['content']}
-                            </div>
-                            """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                            <div style="background: #f5f5f5; padding: 10px; border-radius: 8px; margin: 10px 0;">
-                                <strong>🤖 Claude:</strong> {msg['content']}
-                            </div>
-                            """, unsafe_allow_html=True)
-                else:
-                    st.info("💬 Histórico de chat aparecerá aqui")
-            
-            # Input de mensagem
-            user_input = st.text_area("Sua mensagem:", height=100, placeholder="Digite sua mensagem aqui...")
-            
-            # Botões de chat
-            col_chat1, col_chat2 = st.columns(2)
-            
-            with col_chat1:
-                if st.button("📤 Enviar", key="send_chat", use_container_width=True):
-                    if user_input.strip() and st.session_state.get('active_chat_session'):
-                        # Adicionar mensagem do usuário ao histórico
-                        st.session_state.chat_history.append({
-                            "role": "user",
-                            "content": user_input.strip()
-                        })
-                        
-                        # Enviar para API principal
-                        try:
-                            chat_data = {
-                                "message": user_input.strip(),
-                                "session_id": st.session_state.active_chat_session
-                            }
-                            
-                            # Fazer request streaming para API principal
-                            with st.spinner("🤖 Claude está pensando..."):
-                                response = requests.post(
-                                    f"{api_url}/api/chat", 
-                                    json=chat_data,
-                                    stream=True,
-                                    timeout=60
-                                )
-                                
-                                if response.status_code == 200:
-                                    claude_response = ""
-                                    for line in response.iter_lines():
-                                        if line:
-                                            line = line.decode('utf-8')
-                                            if line.startswith('data: '):
-                                                try:
-                                                    data = json.loads(line[6:])
-                                                    if data['type'] == 'content':
-                                                        claude_response += data.get('content', '')
-                                                    elif data['type'] == 'done':
-                                                        break
-                                                except json.JSONDecodeError:
-                                                    continue
-                                    
-                                    # Adicionar resposta do Claude ao histórico
-                                    if claude_response.strip():
-                                        st.session_state.chat_history.append({
-                                            "role": "assistant", 
-                                            "content": claude_response.strip()
-                                        })
-                                        
-                                        add_debug_log("info", "Mensagem de chat processada", {
-                                            "session_id": st.session_state.active_chat_session,
-                                            "user_message_length": len(user_input),
-                                            "claude_response_length": len(claude_response)
-                                        })
-                                        
-                                        st.rerun()
-                                else:
-                                    st.error(f"❌ Erro HTTP {response.status_code}")
-                        
-                        except Exception as e:
-                            st.error(f"❌ Erro no chat: {str(e)}")
-                            add_debug_log("error", f"Erro no chat ativo: {str(e)}")
-                    else:
-                        if not st.session_state.get('active_chat_session'):
-                            st.warning("⚠️ Crie uma sessão primeiro")
-                        else:
-                            st.warning("⚠️ Digite uma mensagem")
-            
-            with col_chat2:
-                if st.button("🗑️ Limpar Chat", key="clear_chat", use_container_width=True):
-                    st.session_state.chat_history = []
-                    st.success("✅ Histórico limpo!")
-                    st.rerun()
-    
-    # Tab 3: Logs de Debug
-    with tab3:
         st.header("📝 Logs de Debug")
         
         if not st.session_state.debug_mode:
@@ -1296,8 +1085,8 @@ CONVERSA PARA ANÁLISE:
         else:
             st.info("📋 Nenhum log de debug disponível")
     
-    # Tab 4: Métricas
-    with tab4:
+    # Tab 3: Métricas
+    with tab3:
         st.header("📊 Métricas de Performance")
         
         if st.session_state.test_results:
@@ -1383,266 +1172,6 @@ CONVERSA PARA ANÁLISE:
             
         else:
             st.info("📊 Execute alguns testes para ver métricas aqui")
-    
-    # Tab 5: Resumos Salvos
-    with tab5:
-        st.header("📋 Histórico de Resumos")
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.subheader("🔍 Filtros")
-            
-            # Filtros para busca
-            filter_session_id = st.text_input("ID da Sessão (opcional):", 
-                                             placeholder="Ex: b9d98448-be5c-41a2...")
-            filter_directory = st.text_input("Diretório (opcional):", 
-                                           placeholder="Ex: -home-suthub--claude-cc-sdk-chat-api")
-            
-            limit_summaries = st.number_input("Limite:", value=20, min_value=5, max_value=100)
-        
-        with col2:
-            st.subheader("📊 Estatísticas")
-            
-            # Buscar estatísticas dos resumos
-            try:
-                params = {}
-                if filter_directory:
-                    params['directory'] = filter_directory
-                if filter_session_id:
-                    params['session_id'] = filter_session_id
-                params['limit'] = limit_summaries
-                
-                # Fazer request para API
-                query_string = "&".join([f"{k}={v}" for k, v in params.items()])
-                response = requests.get(f"{VIEWER_URL}/api/summaries?{query_string}", timeout=10)
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    summaries = data.get('summaries', [])
-                    stats = data.get('storage_stats', {})
-                    
-                    st.metric("Total no Sistema", stats.get('total_summaries', 0))
-                    st.metric("Sessões com Resumos", stats.get('total_sessions', 0))
-                    st.metric("Encontrados", len(summaries))
-                    
-                    # Lista de resumos
-                    st.subheader(f"📄 Resumos ({len(summaries)})")
-                    
-                    if summaries:
-                        for i, summary in enumerate(summaries):
-                            timestamp = summary.get('timestamp', '')[:19].replace('T', ' ')
-                            summary_type = summary.get('summary_type', 'N/A')
-                            session_id_short = summary.get('session_id', 'N/A')[:8]
-                            
-                            # Card para cada resumo
-                            with st.container():
-                                st.markdown(f"""
-                                <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin: 10px 0; background: white;">
-                                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                                        <strong>📝 {summary_type.title()}</strong>
-                                        <small>{timestamp}</small>
-                                    </div>
-                                    <div style="color: #666; font-size: 14px; margin-bottom: 8px;">
-                                        <strong>Sessão:</strong> {session_id_short}... | 
-                                        <strong>Diretório:</strong> {summary.get('directory', 'N/A')[:30]}...
-                                    </div>
-                                    <div style="color: #666; font-size: 12px;">
-                                        <strong>ID:</strong> <code>{summary.get('id', 'N/A')}</code>
-                                    </div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                                
-                                # Botões de ação
-                                col_btn1, col_btn2, col_btn3 = st.columns(3)
-                                
-                                with col_btn1:
-                                    if st.button(f"👁️ Ver", key=f"view_{summary.get('id')}", use_container_width=True):
-                                        # Exibir resumo completo
-                                        st.markdown("**📝 Conteúdo do Resumo:**")
-                                        st.text_area("", summary.get('summary_content', ''), height=150, disabled=True, key=f"content_{summary.get('id')}")
-                                
-                                with col_btn2:
-                                    # Link direto para viewer web
-                                    web_url = f"http://localhost:3041/{summary.get('directory')}/{summary.get('session_id')}/resumo?tipo={summary.get('summary_type')}"
-                                    st.markdown(f"[🌐 Web]({web_url})", unsafe_allow_html=True)
-                                
-                                with col_btn3:
-                                    if st.button(f"🗑️ Deletar", key=f"del_{summary.get('id')}", use_container_width=True):
-                                        # Deletar resumo
-                                        try:
-                                            delete_url = f"{VIEWER_URL}/api/summaries/{summary.get('id')}?directory={summary.get('directory')}&session_id={summary.get('session_id')}"
-                                            del_response = requests.delete(delete_url, timeout=5)
-                                            if del_response.status_code == 200:
-                                                st.success("✅ Resumo removido!")
-                                                st.rerun()
-                                            else:
-                                                st.error("❌ Erro ao remover resumo")
-                                        except Exception as e:
-                                            st.error(f"❌ Erro: {str(e)}")
-                    else:
-                        st.info("📄 Nenhum resumo encontrado com os filtros aplicados")
-                else:
-                    st.error(f"❌ Erro ao buscar resumos: HTTP {response.status_code}")
-                    
-            except Exception as e:
-                st.error(f"❌ Erro na comunicação: {str(e)}")
-    
-    # Tab 6: Diagnóstico
-    with tab6:
-        st.header("🔧 Diagnóstico do Sistema")
-        
-        # Status geral
-        st.markdown("""
-        <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-            <strong>🎉 STATUS: Sistema Totalmente Funcional!</strong><br>
-            ✅ API de resumo implementada e testada<br>
-            ✅ Claude SDK integrado via subprocess<br>
-            ✅ Todos os endpoints operacionais
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("🚀 Funcionalidades Ativas")
-            
-            if st.button("🧪 Teste de Resumo Funcional", key="func_test_1", use_container_width=True):
-                with st.spinner("Testando geração de resumo..."):
-                    # Buscar uma sessão para testar
-                    try:
-                        response = requests.get(f"{VIEWER_URL}/api/sessions", timeout=5)
-                        if response.status_code == 200:
-                            sessions = response.json()
-                            if sessions:
-                                # Pegar primeira sessão para teste
-                                test_session = sessions[0]
-                                
-                                # Testar API de resumo
-                                test_response = requests.post(
-                                    f"{VIEWER_URL}/api/summarize", 
-                                    json={
-                                        "directory": test_session["directory"],
-                                        "session_id": test_session["session_id"],
-                                        "summary_type": "conciso"
-                                    },
-                                    timeout=30
-                                )
-                                
-                                if test_response.status_code == 200:
-                                    result = test_response.json()
-                                    if result.get("success"):
-                                        st.success("🎉 Teste de resumo PASSOU!")
-                                        st.info(f"""
-                                        **Resultado do teste:**
-                                        - Tokens processados: {result.get('metrics', {}).get('input_tokens', 0)}
-                                        - Resumo gerado: {len(result.get('summary', ''))} caracteres  
-                                        - Custo estimado: ${result.get('metrics', {}).get('cost', 0):.6f}
-                                        """)
-                                    else:
-                                        st.error(f"❌ API retornou erro: {result.get('error')}")
-                                else:
-                                    st.error(f"❌ HTTP {test_response.status_code}")
-                            else:
-                                st.warning("⚠️ Nenhuma sessão disponível para teste")
-                        else:
-                            st.error("❌ Não foi possível acessar sessões")
-                    except Exception as e:
-                        st.error(f"❌ Erro no teste: {str(e)}")
-            
-            st.markdown("---")
-            
-            # Lista de funcionalidades
-            st.markdown("""
-            **✅ Funcionalidades Implementadas:**
-            - 📋 Listagem de sessões ativa
-            - 📄 Leitura de arquivos .jsonl
-            - 🤖 Integração Claude SDK (subprocess)
-            - 📝 Geração de resumos (conciso/detalhado/bullets)
-            - 📊 Cálculo de métricas (tokens, custo)
-            - 🔍 Interface de debug avançada
-            """)
-            
-        with col2:
-            st.subheader("🔧 Testes de Conectividade")
-            
-            if st.button("🔍 Diagnóstico Completo", key="diag_test_1", use_container_width=True):
-                with st.spinner("Executando diagnóstico..."):
-                    results = []
-                    
-                    # Teste 1: API de sessões
-                    try:
-                        response = requests.get(f"{VIEWER_URL}/api/sessions", timeout=5)
-                        if response.status_code == 200:
-                            sessions = response.json()
-                            results.append(("✅", f"API Sessions: {len(sessions)} sessões"))
-                        else:
-                            results.append(("❌", f"API Sessions: HTTP {response.status_code}"))
-                    except Exception as e:
-                        results.append(("❌", f"API Sessions: {str(e)}"))
-                    
-                    # Teste 2: Estrutura de arquivos
-                    if CLAUDE_PROJECTS_PATH.exists():
-                        session_count = sum(len(list(d.glob("*.jsonl"))) for d in CLAUDE_PROJECTS_PATH.iterdir() if d.is_dir())
-                        results.append(("✅", f"Sistema de arquivos: {session_count} arquivos .jsonl"))
-                    else:
-                        results.append(("❌", "Sistema de arquivos: Path não encontrado"))
-                    
-                    # Teste 3: Claude SDK
-                    sdk_path = Path("/home/suthub/.claude/cc-sdk-chat/api/claude-code-sdk-python")
-                    if sdk_path.exists():
-                        results.append(("✅", "Claude SDK: Integração ativa"))
-                    else:
-                        results.append(("❌", "Claude SDK: Não encontrado"))
-                    
-                    # Exibir resultados
-                    for status, message in results:
-                        if status == "✅":
-                            st.success(f"{status} {message}")
-                        else:
-                            st.error(f"{status} {message}")
-            
-            # Informações técnicas
-            st.subheader("📋 Informações Técnicas")
-            st.code(f"""
-Backend API: {VIEWER_URL}
-Frontend Viewer: http://localhost:8505
-Claude Projects: {CLAUDE_PROJECTS_PATH}
-Claude SDK: /home/suthub/.claude/cc-sdk-chat/api/claude-code-sdk-python
-            """, language="yaml")
-        
-        with col2:
-            st.subheader("📁 Sistema de Arquivos")
-            
-            # Verifica path das sessões
-            if CLAUDE_PROJECTS_PATH.exists():
-                st.success(f"✅ Projects path existe: {CLAUDE_PROJECTS_PATH}")
-                
-                # Conta sessões disponíveis
-                session_count = 0
-                for directory in CLAUDE_PROJECTS_PATH.iterdir():
-                    if directory.is_dir():
-                        session_count += len(list(directory.glob("*.jsonl")))
-                
-                st.info(f"📊 Total de sessões no sistema: {session_count}")
-                
-            else:
-                st.error(f"❌ Projects path não existe: {CLAUDE_PROJECTS_PATH}")
-            
-            # Verifica Claude SDK
-            sdk_path = Path("/home/suthub/.claude/cc-sdk-chat/viewer-claude/backend/claude-sdk")
-            if sdk_path.exists():
-                st.success("✅ Claude SDK linkado corretamente")
-            else:
-                st.error("❌ Claude SDK não encontrado")
-            
-            # Logs do sistema
-            st.subheader("📜 Logs Recentes")
-            if st.session_state.debug_logs:
-                recent_logs = st.session_state.debug_logs[-5:]
-                for log in recent_logs:
-                    level_icon = {"info": "🔵", "warning": "🟡", "error": "🔴"}.get(log["level"], "⚫")
-                    st.text(f"{level_icon} {log['timestamp'][-8:]} - {log['message'][:50]}...")
 
 if __name__ == "__main__":
     main()
