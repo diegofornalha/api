@@ -827,28 +827,6 @@ def main():
                                     st.rerun()
                             
                         
-                    else:
-                        # Estado quando não há resumo gerado
-                        st.markdown("""
-                        <div style="background: #f8f9fa; border: 2px dashed #dee2e6; border-radius: 15px; 
-                                    padding: 40px; text-align: center; margin: 20px 0;">
-                            <div style="color: #6c757d; font-size: 48px; margin-bottom: 15px;">📄</div>
-                            <h3 style="color: #6c757d; margin: 0 0 10px 0;">Nenhum Resumo Gerado</h3>
-                            <p style="color: #6c757d; margin: 10px 0; font-size: 16px;">Execute um teste para ver o resumo aqui</p>
-                            <div style="margin-top: 20px;">
-                                <span style="color: #adb5bd;">⬆️ Selecione uma sessão acima e clique em "🚀 Executar Teste"</span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Botão para limpar estado se houver dados antigos
-                        if st.button("🗑️ Limpar Cache de Resumos", key="clear_summary_cache"):
-                            # Limpar qualquer estado antigo
-                            keys_to_remove = [k for k in st.session_state.keys() if 'summary' in k.lower()]
-                            for key in keys_to_remove:
-                                del st.session_state[key]
-                            st.success("✅ Cache limpo!")
-                            st.rerun()
                 else:
                     st.warning("⚠️ Nenhuma sessão encontrada")
             else:
