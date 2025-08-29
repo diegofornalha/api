@@ -523,13 +523,6 @@ def main():
             
             st.rerun()
     
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-    <div style='text-align: center; color: #666; font-size: 0.8rem;'>
-        Claude Code SDK Python
-    </div>
-    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
